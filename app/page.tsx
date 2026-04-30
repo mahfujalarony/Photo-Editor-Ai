@@ -62,25 +62,25 @@ export default function Home() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
               {/* Feature 1 */}
-              <div className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
+              <Link href="/tools/ai-upscaling" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-6 text-xl">✨</div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">AI Upscaling</h3>
                 <p className="text-gray-600">Turn low-resolution images into stunning 4K masterpieces without losing quality.</p>
-              </div>
+              </Link>
 
               {/* Feature 2 */}
-              <div className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
+              <Link href="/tools/remove-background" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-6 text-xl">✂️</div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Background Removal</h3>
                 <p className="text-gray-600">Instantly isolate subjects from complex backgrounds with pixel-perfect precision.</p>
-              </div>
+              </Link>
 
               {/* Feature 3 */}
-              <div className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
+              <Link href="/tools/magic-eraser" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-6 text-xl">🎨</div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Magic Eraser</h3>
                 <p className="text-gray-600">Remove unwanted objects, photobombers, or text from your photos seamlessly.</p>
-              </div>
+              </Link>
             </div>
           </div>
         </section>

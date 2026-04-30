@@ -20,6 +20,10 @@ export const metadata: Metadata = {
     template: "%s | Rony Studio",
   },
   description: "Rony Studio is the personal website and creative portfolio of Rony.",
+  icons: {
+    icon: [{ url: "/photoeditor.svg", type: "image/svg+xml" }],
+    shortcut: "/photoeditor.svg",
+  },
   alternates: {
     canonical: "/",
   },
