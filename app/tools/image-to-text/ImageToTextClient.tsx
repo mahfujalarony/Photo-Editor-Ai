@@ -3,7 +3,7 @@
 import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react';
 
 export default function ImageToTextClient() {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+  const apiBaseUrl = process.env.BACKEND_URL ?? 'http://localhost:8000';
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
