@@ -1,9 +1,8 @@
 'use client';
 
-import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 export default function ImageToTextClient() {
-  const apiBaseUrl = process.env.BACKEND_URL ?? 'http://localhost:8000';
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -12,7 +11,7 @@ export default function ImageToTextClient() {
   const [isDragging, setIsDragging] = useState(false);
   const handleFileRef = useRef<((nextFile: File) => void) | null>(null);
 
-  const handleSelectedFile = (selectedFile: File) => {
+  const handleSelectedFile = useCallback((selectedFile: File) => {
     if (preview) {
       URL.revokeObjectURL(preview);
     }
@@ -21,7 +20,7 @@ export default function ImageToTextClient() {
     setPreview(URL.createObjectURL(selectedFile));
     setExtractedText('');
     setCopySuccess(false);
-  };
+  }, [preview]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -42,7 +41,7 @@ export default function ImageToTextClient() {
 
   useEffect(() => {
     handleFileRef.current = handleSelectedFile;
-  }, [preview]);
+  }, [handleSelectedFile]);
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -80,18 +79,18 @@ export default function ImageToTextClient() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/extract-text`, {
+      const response = await fetch('/api/extract-text', {
         method: 'POST',
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Failed to extract text');
-
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'Failed to extract text');
+
       if (data.success) {
         setExtractedText(data.text);
       } else {
-        setExtractedText("No text could be found in this image.");
+        setExtractedText(data.error ?? "No text could be found in this image.");
       }
     } catch (error) {
       console.error(error);
