@@ -64,8 +64,8 @@ export default function Home() {
               {/* Feature 1 */}
               <Link href="/tools/image-resizer" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-6 text-xl">✨</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">AI Upscaling</h3>
-                <p className="text-gray-600">Turn low-resolution images into stunning 4K masterpieces without losing quality.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Image Resizer</h3>
+                <p className="text-gray-600">Resize images to any dimension while maintaining quality.</p>
               </Link>
 
               {/* Feature 2 */}
@@ -75,7 +75,14 @@ export default function Home() {
                 <p className="text-gray-600">Instantly isolate subjects from complex backgrounds with pixel-perfect precision.</p>
               </Link>
 
-              {/* Feature 3 */}
+                            {/* Feature 3 */}
+              <Link href="/tools/image-to-text" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
+                <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-lg flex items-center justify-center mb-6 text-xl">📝</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Image to Text</h3>
+                <p className="text-gray-600">Extract text from images with high accuracy and speed.</p>
+              </Link>
+
+              {/* Feature 4 */}
               <Link href="/tools/magic-eraser" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-6 text-xl">🎨</div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Magic Eraser</h3>
