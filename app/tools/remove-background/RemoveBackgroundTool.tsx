@@ -2,11 +2,15 @@
 
 import Image from "next/image";
 import type { ChangeEvent, DragEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactCrop, { type Crop, type PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_SOURCE_FILE_SIZE = 50 * 1024 * 1024;
+const MAX_SERVER_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_UPLOAD_DIMENSION = 2500;
+const UPLOAD_QUALITY_STEPS = [0.88, 0.8, 0.72, 0.64];
+const ALPHA_TRIM_THRESHOLD = 4;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const BACKGROUND_COLORS = [
@@ -36,6 +40,257 @@ const FORMAT_OPTIONS: { label: string; value: DownloadFormat; mime: string }[] =
   { label: "WebP", value: "webp", mime: "image/webp" },
 ];
 
+function CropIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3v12a3 3 0 0 0 3 3h12M3 6h12a3 3 0 0 1 3 3v12M9 9h6v6H9z"
+      />
+    </svg>
+  );
+}
+
+function cleanErrorText(text: string) {
+  const cleaned = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned.length > 300 ? `${cleaned.slice(0, 300)}...` : cleaned;
+}
+
+async function readApiResponse(response: Response): Promise<ApiResponse> {
+  const contentType = response.headers.get("content-type") ?? "";
+  const responseText = await response.text();
+
+  if (!responseText) {
+    return {};
+  }
+
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(responseText) as ApiResponse;
+    } catch {
+      return { error: cleanErrorText(responseText) };
+    }
+  }
+
+  return { error: cleanErrorText(responseText) };
+}
+
+function getUploadFileName(fileName: string) {
+  const nameWithoutExtension = fileName.replace(/\.[^/.]+$/, "");
+  return `${nameWithoutExtension || "upload"}-optimized.jpg`;
+}
+
+function getConstrainedSize(width: number, height: number) {
+  const scale = Math.min(1, MAX_UPLOAD_DIMENSION / Math.max(width, height));
+
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    const url = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not load the image."));
+    };
+
+    image.src = url;
+  });
+}
+
+function loadImageFromSource(source: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+
+    image.onload = () => {
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      reject(new Error("Could not load the image."));
+    };
+
+    image.src = source;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Could not optimize the image."));
+          return;
+        }
+
+        resolve(blob);
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+function flattenCanvasForJpeg(canvas: HTMLCanvasElement) {
+  const flattenedCanvas = document.createElement("canvas");
+  flattenedCanvas.width = canvas.width;
+  flattenedCanvas.height = canvas.height;
+
+  const ctx = flattenedCanvas.getContext("2d");
+  if (!ctx) throw new Error("Could not prepare the image.");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, flattenedCanvas.width, flattenedCanvas.height);
+  ctx.drawImage(canvas, 0, 0);
+
+  return flattenedCanvas;
+}
+
+async function createUploadFileFromCanvas(
+  canvas: HTMLCanvasElement,
+  sourceFileName: string,
+) {
+  const flattenedCanvas = flattenCanvasForJpeg(canvas);
+  let smallestBlob: Blob | null = null;
+
+  for (const quality of UPLOAD_QUALITY_STEPS) {
+    const blob = await canvasToBlob(flattenedCanvas, quality);
+    smallestBlob = blob;
+
+    if (blob.size <= MAX_SERVER_FILE_SIZE) {
+      return new File([blob], getUploadFileName(sourceFileName), {
+        type: "image/jpeg",
+      });
+    }
+  }
+
+  if (smallestBlob) {
+    return new File([smallestBlob], getUploadFileName(sourceFileName), {
+      type: "image/jpeg",
+    });
+  }
+
+  throw new Error("Could not optimize the image.");
+}
+
+async function optimizeImageForUpload(file: File) {
+  const image = await loadImageFromFile(file);
+  const shouldResize =
+    Math.max(image.naturalWidth, image.naturalHeight) > MAX_UPLOAD_DIMENSION;
+
+  if (!shouldResize && file.size <= MAX_SERVER_FILE_SIZE) {
+    return file;
+  }
+
+  const { width, height } = getConstrainedSize(
+    image.naturalWidth,
+    image.naturalHeight,
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not prepare the image.");
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image, 0, 0, width, height);
+
+  const optimizedFile = await createUploadFileFromCanvas(canvas, file.name);
+
+  if (optimizedFile.size > MAX_SERVER_FILE_SIZE) {
+    throw new Error(
+      "Could not compress this image below 10MB. Try cropping it or choose a smaller file.",
+    );
+  }
+
+  return optimizedFile;
+}
+
+async function trimTransparentPreview(source: string) {
+  const image = await loadImageFromSource(source);
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return source;
+
+  ctx.drawImage(image, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data, width, height } = imageData;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const alpha = data[(y * width + x) * 4 + 3];
+
+      if (alpha > ALPHA_TRIM_THRESHOLD) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return source;
+  }
+
+  const trimmedWidth = maxX - minX + 1;
+  const trimmedHeight = maxY - minY + 1;
+
+  if (trimmedWidth === width && trimmedHeight === height) {
+    return source;
+  }
+
+  const trimmedCanvas = document.createElement("canvas");
+  trimmedCanvas.width = trimmedWidth;
+  trimmedCanvas.height = trimmedHeight;
+
+  const trimmedCtx = trimmedCanvas.getContext("2d");
+  if (!trimmedCtx) return source;
+
+  trimmedCtx.drawImage(
+    canvas,
+    minX,
+    minY,
+    trimmedWidth,
+    trimmedHeight,
+    0,
+    0,
+    trimmedWidth,
+    trimmedHeight,
+  );
+
+  return trimmedCanvas.toDataURL("image/png");
+}
+
 export default function RemoveBackgroundTool() {
   const inputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -43,9 +298,13 @@ export default function RemoveBackgroundTool() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultImage, setResultImage] = useState<string | null>(null);
+  const [resultPreviewImage, setResultPreviewImage] = useState<string | null>(
+    null,
+  );
 
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
+  const [isCropMode, setIsCropMode] = useState(false);
 
   const [bgColor, setBgColor] = useState("transparent");
   const [customColor, setCustomColor] = useState("#ffffff");
@@ -58,9 +317,10 @@ export default function RemoveBackgroundTool() {
   // Keep track of handleFile so we can use it in the paste event securely
   const handleFileRef = useRef<((file: File) => void) | null>(null);
 
-  function handleFile(file: File) {
+  const handleFile = useCallback((file: File) => {
     setError(null);
     setResultImage(null);
+    setResultPreviewImage(null);
 
     if (!ALLOWED_TYPES.has(file.type)) {
       setSelectedFile(null);
@@ -68,19 +328,48 @@ export default function RemoveBackgroundTool() {
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
+    if (file.size > MAX_SOURCE_FILE_SIZE) {
       setSelectedFile(null);
-      setError("Please choose an image smaller than 10MB.");
+      setError("Please choose an image smaller than 50MB.");
       return;
     }
 
     if (previewUrl) URL.revokeObjectURL(previewUrl);
 
+    setCrop(undefined);
+    setCompletedCrop(null);
+    setIsCropMode(false);
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
-  }
+  }, [previewUrl]);
 
-  handleFileRef.current = handleFile;
+  useEffect(() => {
+    handleFileRef.current = handleFile;
+  }, [handleFile]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!resultImage) {
+      return;
+    }
+
+    trimTransparentPreview(resultImage)
+      .then((trimmedImage) => {
+        if (!isCancelled) {
+          setResultPreviewImage(trimmedImage);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setResultPreviewImage(resultImage);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [resultImage]);
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -119,6 +408,19 @@ export default function RemoveBackgroundTool() {
     if (file) handleFile(file);
   }
 
+  function toggleCropMode() {
+    setIsCropMode((current) => {
+      const nextCropMode = !current;
+
+      if (!nextCropMode) {
+        setCrop(undefined);
+        setCompletedCrop(null);
+      }
+
+      return nextCropMode;
+    });
+  }
+
   async function getCroppedImage(
     image: HTMLImageElement,
     crop: PixelCrop,
@@ -127,16 +429,17 @@ export default function RemoveBackgroundTool() {
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
 
-    // Use actual pixel dimensions for the canvas to maintain high resolution
     const pixelWidth = Math.floor(crop.width * scaleX);
     const pixelHeight = Math.floor(crop.height * scaleY);
+    const { width, height } = getConstrainedSize(pixelWidth, pixelHeight);
 
-    canvas.width = pixelWidth;
-    canvas.height = pixelHeight;
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext("2d");
 
     if (!ctx) throw new Error("No 2d context for cropping");
     
+    ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
     ctx.drawImage(
@@ -147,19 +450,20 @@ export default function RemoveBackgroundTool() {
       crop.height * scaleY,
       0,
       0,
-      pixelWidth,
-      pixelHeight,
+      width,
+      height,
     );
 
-    return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error("Canvas is empty"));
-          return;
-        }
-        resolve(new File([blob], selectedFile?.name || "cropped.png", { type: selectedFile?.type || "image/png" }));
-      }, selectedFile?.type || "image/png", 1.0);
-    });
+    const croppedFile = await createUploadFileFromCanvas(
+      canvas,
+      selectedFile?.name || "cropped.jpg",
+    );
+
+    if (croppedFile.size > MAX_SERVER_FILE_SIZE) {
+      throw new Error("The cropped image is still too large.");
+    }
+
+    return croppedFile;
   }
 
   async function removeBackground() {
@@ -171,34 +475,46 @@ export default function RemoveBackgroundTool() {
     setIsProcessing(true);
     setError(null);
     setResultImage(null);
+    setResultPreviewImage(null);
 
     let fileToSend: File = selectedFile;
+    let didCrop = false;
     
     try {
       if (
+        isCropMode &&
         completedCrop &&
         completedCrop.width > 0 &&
         completedCrop.height > 0 &&
         imgRef.current
       ) {
         fileToSend = await getCroppedImage(imgRef.current, completedCrop);
+        didCrop = true;
       }
-    } catch (err) {
-      setError("Could not crop the image.");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Could not crop the image.",
+      );
       setIsProcessing(false);
       return;
     }
 
-    const formData = new FormData();
-    formData.append("image", fileToSend);
-
     try {
+      if (!didCrop) {
+        fileToSend = await optimizeImageForUpload(fileToSend);
+      }
+
+      const formData = new FormData();
+      formData.append("image", fileToSend);
+
       const response = await fetch("/api/remove-background", {
         method: "POST",
         body: formData,
       });
 
-      const data = (await response.json()) as ApiResponse;
+      const data = await readApiResponse(response);
 
       if (!response.ok || !data.image) {
         throw new Error(data.error ?? "Could not remove the background.");
@@ -278,11 +594,13 @@ export default function RemoveBackgroundTool() {
   function resetTool() {
     setSelectedFile(null);
     setResultImage(null);
+    setResultPreviewImage(null);
     setError(null);
     setBgColor("transparent");
     setCustomColor("#ffffff");
     setCrop(undefined);
     setCompletedCrop(null);
+    setIsCropMode(false);
 
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
@@ -293,6 +611,16 @@ export default function RemoveBackgroundTool() {
       inputRef.current.value = "";
     }
   }
+
+  const originalPreviewImage = previewUrl ? (
+    <img
+      ref={imgRef}
+      src={previewUrl}
+      alt="Original upload preview"
+      className="max-h-[500px] w-auto object-contain"
+      crossOrigin="anonymous"
+    />
+  ) : null;
 
   return (
     <div className="mx-auto max-w-6xl rounded-3xl border border-blue-100 bg-white p-4 shadow-2xl sm:p-6">
@@ -345,7 +673,7 @@ export default function RemoveBackgroundTool() {
           </div>
 
           <p className="text-2xl font-bold text-gray-900">Upload Image</p>
-          <p className="mt-2 text-gray-500">JPG, PNG, or WebP up to 10MB</p>
+          <p className="mt-2 text-gray-500">JPG, PNG, or WebP up to 50MB</p>
 
           <button
             type="button"
@@ -362,30 +690,45 @@ export default function RemoveBackgroundTool() {
                 Original
               </h2>
 
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
-              >
-                Change
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleCropMode}
+                  aria-pressed={isCropMode}
+                  aria-label={isCropMode ? "Turn crop off" : "Turn crop on"}
+                  title={isCropMode ? "Turn crop off" : "Turn crop on"}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold transition ${
+                    isCropMode
+                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:text-blue-600"
+                  }`}
+                >
+                  <CropIcon />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                >
+                  Change
+                </button>
+              </div>
             </div>
 
             <div className="flex aspect-square items-center justify-center overflow-auto rounded-2xl bg-gray-100">
-              <ReactCrop
-                crop={crop}
-                onChange={(_, percentCrop) => setCrop(percentCrop)}
-                onComplete={(c) => setCompletedCrop(c)}
-                className="max-h-[500px]"
-              >
-                <img
-                  ref={imgRef}
-                  src={previewUrl}
-                  alt="Original upload preview"
-                  className="max-h-[500px] w-auto object-contain"
-                  crossOrigin="anonymous"
-                />
-              </ReactCrop>
+              {isCropMode ? (
+                <ReactCrop
+                  crop={crop}
+                  onChange={(_, percentCrop) => setCrop(percentCrop)}
+                  onComplete={(c) => setCompletedCrop(c)}
+                  className="max-h-[500px]"
+                >
+                  {originalPreviewImage}
+                </ReactCrop>
+              ) : (
+                originalPreviewImage
+              )}
             </div>
           </div>
 
@@ -423,7 +766,7 @@ export default function RemoveBackgroundTool() {
             </div>
 
             <div
-              className={`relative flex w-full max-w-full flex-col sm:aspect-square items-center justify-center overflow-hidden rounded-2xl border border-gray-200 ${
+              className={`relative flex aspect-square w-full max-w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-gray-200 ${
                 bgColor === "transparent" || bgColor === ""
                   ? "bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNlNWU3ZWIiLz48cmVjdCB4PSI0IiB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZTVlN2ViIi8+PC9zdmc+')] bg-repeat"
                   : ""
@@ -432,11 +775,11 @@ export default function RemoveBackgroundTool() {
             >
               {resultImage ? (
                 <Image
-                  src={resultImage}
+                  src={resultPreviewImage ?? resultImage}
                   alt="Background removed result"
                   fill
                   unoptimized
-                  className="object-contain object-bottom p-2 sm:p-4"
+                  className="object-contain object-center"
                 />
               ) : (
                 <div className="px-6 text-center">
