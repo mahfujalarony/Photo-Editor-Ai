@@ -83,10 +83,10 @@ export default function Home() {
               </Link>
 
               {/* Feature 4 */}
-              <Link href="/tools/magic-eraser" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
+              <Link href="/tools/nature-background-editor" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-6 text-xl">🎨</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">Magic Eraser</h3>
-                <p className="text-gray-600">Remove unwanted objects, photobombers, or text from your photos seamlessly.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Nature Background</h3>
+                <p className="text-gray-600">Enhance your images with beautiful, natural backgrounds</p>
               </Link>
             </div>
           </div>

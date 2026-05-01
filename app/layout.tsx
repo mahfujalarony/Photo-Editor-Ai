@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { getServerSession } from "next-auth";
+import AuthProvider from "@/components/AuthProvider";
+import PwaRegister from "@/components/PwaRegister";
+import { authOptions } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,20 +45,28 @@ export const metadata: Metadata = {
     description:
       "Rony Studio is the personal website and creative portfolio of Rony.",
   },
+  manifest: "/manifest.webmanifest",
 };
 
-export default function RootLayout({
+export const viewport = {
+  themeColor: "#0b1220",
+};
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
+        <AuthProvider session={session}>{children}</AuthProvider>
+        <PwaRegister />
         <Analytics />
       </body>
     </html>
