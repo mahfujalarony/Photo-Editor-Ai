@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description:
     "Place your photo into natural outdoor scenes with AI background removal and a ready-made nature gallery.",
   keywords: [
+    "background editor",
+    "background remover",
     "nature background editor",
     "AI background changer",
     "outdoor photo maker",
@@ -17,7 +19,7 @@ export const metadata: Metadata = {
     title: "Nature Background Editor - Lumina AI",
     description:
       "Upload a photo, choose a nature scene, and export a finished outdoor image.",
-    url: "https://rony.studio/tools/nature-background-editor",
+    url: "https://rony.studio/tools/background-editor",
   },
 };
 

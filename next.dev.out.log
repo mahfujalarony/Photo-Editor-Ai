@@ -1,0 +1,16 @@
+
+> my-app@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.4 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.103:3000
+- Environments: .env.local
+✓ Ready in 946ms
+Creating turbopack project { dir: 'C:\\Projects\\saas\\my-app', testMode: true }
+
+ GET /manifest.webmanifest 200 in 300ms (next.js: 269ms, application-code: 31ms)
+ GET /admin 404 in 950ms (next.js: 233ms, application-code: 717ms)
+ GET / 200 in 207ms (next.js: 49ms, application-code: 158ms)
+ GET /admin 404 in 78ms (next.js: 16ms, application-code: 62ms)
+[?25h

@@ -571,14 +571,33 @@ export default function RemoveBackgroundTool() {
           if (!blob) return;
 
           const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
+          const downloadName = `lumina-background.${downloadFormat === "jpeg" ? "jpg" : downloadFormat}`;
+          
+          // Save the final background result to R2
+          try {
+            const formData = new FormData();
+            formData.append("file", blob, downloadName);
+            formData.append("outputName", downloadName);
+            formData.append("originalName", selectedFile?.name ?? "");
+            formData.append("width", String(canvas.width));
+            formData.append("height", String(canvas.height));
 
+            // Save to the proper remove background results API
+            fetch("/api/remove-background/results", {
+              method: "POST",
+              body: formData,
+            });
+          } catch {
+             // Ignore save errors
+          }
+
+          const link = document.createElement("a");
           link.href = url;
-          link.download = `lumina-background.${downloadFormat === "jpeg" ? "jpg" : downloadFormat}`;
+          link.download = downloadName;
           document.body.appendChild(link);
           link.click();
           link.remove();
-
+          
           URL.revokeObjectURL(url);
         },
         mime,

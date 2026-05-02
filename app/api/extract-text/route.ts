@@ -1,4 +1,13 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+
+import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/mongodb";
+import {
+  createR2ObjectKeyForTool,
+  getR2PublicUrl,
+  uploadR2Object,
+} from "@/lib/r2";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -95,6 +104,50 @@ export async function POST(request: Request) {
 
     if (!isRecord(payload)) {
       return errorResponse("Backend returned an invalid text extraction response.", 502);
+    }
+
+    // Save the image and the extracted text to R2 and Database
+    if (payload.success && typeof payload.text === "string") {
+      try {
+        const session = await getServerSession(authOptions);
+        const imageBuffer = Buffer.from(await image.arrayBuffer());
+        
+        let ext = "jpg";
+        if (image.type === "image/png") ext = "png";
+        if (image.type === "image/webp") ext = "webp";
+
+        const key = createR2ObjectKeyForTool("image-to-text", ext);
+        const outputName = image.name || `image-to-text.${ext}`;
+
+        await uploadR2Object({
+          key,
+          body: imageBuffer,
+          contentType: image.type,
+          metadata: {
+            tool: "image-to-text",
+            filename: outputName,
+          },
+        });
+
+        const db = await getDb();
+        await db.collection("generated_images").insertOne({
+          tool: "image-to-text",
+          r2Key: key,
+          publicUrl: getR2PublicUrl(key),
+          mimeType: image.type,
+          size: image.size,
+          outputName,
+          extractedText: payload.text, // Saving extracted text
+          userId: session?.user?.id ?? null,
+          userEmail: session?.user?.email ?? null,
+          userName: session?.user?.name ?? null,
+          createdAt: new Date(),
+          downloadedAt: new Date(),
+        });
+      } catch (saveError) {
+        // We log the error but don't block the actual extraction response
+        console.error("Failed to save image to text record:", saveError);
+      }
     }
 
     return NextResponse.json(payload);

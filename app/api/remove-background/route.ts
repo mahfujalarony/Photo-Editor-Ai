@@ -1,4 +1,13 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+
+import { authOptions } from "@/lib/auth";
+import { getDb } from "@/lib/mongodb";
+import {
+  createR2ObjectKeyForTool,
+  getR2PublicUrl,
+  uploadR2Object,
+} from "@/lib/r2";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -94,9 +103,42 @@ export async function POST(request: Request) {
     const imageBuffer = Buffer.from(await backendResponse.arrayBuffer());
     const imageBase64 = imageBuffer.toString("base64");
 
+    const session = await getServerSession(authOptions);
+    const key = createR2ObjectKeyForTool("remove-background", "png");
+    const outputName = image.name 
+      ? image.name.replace(/\.[^/.]+$/, "-bg-removed.png")
+      : "background-removed.png";
+
+    await uploadR2Object({
+      key,
+      body: imageBuffer,
+      contentType: "image/png",
+      metadata: {
+        tool: "remove-background",
+        filename: outputName,
+      },
+    });
+
+    const db = await getDb();
+    const result = await db.collection("generated_images").insertOne({
+      tool: "remove-background",
+      r2Key: key,
+      publicUrl: getR2PublicUrl(key),
+      mimeType: "image/png",
+      size: imageBuffer.length,
+      outputName,
+      userId: session?.user?.id ?? null,
+      userEmail: session?.user?.email ?? null,
+      userName: session?.user?.name ?? null,
+      createdAt: new Date(),
+      downloadedAt: new Date(),
+    });
+
     return NextResponse.json({
+      id: result.insertedId.toString(),
+      imageUrl: getR2PublicUrl(key) ?? `/api/admin/generated-images/${result.insertedId.toString()}/file`,
       image: `data:image/png;base64,${imageBase64}`,
-      filename: "background-removed.png",
+      filename: outputName,
     });
   } catch (caughtError) {
     if (caughtError instanceof Error && caughtError.name === "AbortError") {

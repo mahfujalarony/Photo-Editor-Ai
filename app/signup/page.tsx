@@ -1,9 +1,57 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 
 export default function SignupPage() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | { message?: string }
+        | null;
+      setError(payload?.message ?? "Registration failed. Please try again.");
+      setIsLoading(false);
+      return;
+    }
+
+    const result = await signIn("credentials", {
+      email,
+      password,
+      callbackUrl: "/tools/nature-background-editor",
+      redirect: false,
+    });
+
+    if (result?.error) {
+      setError("Account created, but sign-in failed. Please log in.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (result?.url) {
+      window.location.href = result.url;
+      return;
+    }
+
+    setIsLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-16">
       <div className="mx-auto w-full max-w-md rounded-2xl bg-white p-6 shadow-lg sm:p-8">
@@ -31,33 +79,54 @@ export default function SignupPage() {
           <span className="h-px flex-1 bg-slate-200" />
         </div>
 
-        <div className="space-y-3">
+        <form className="space-y-3" onSubmit={handleSubmit}>
+          <label className="block text-sm font-semibold text-slate-700">
+            Name
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Your name"
+              required
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+            />
+          </label>
           <label className="block text-sm font-semibold text-slate-700">
             Email
             <input
               type="email"
-              placeholder="Email sign-up coming soon"
-              disabled
-              className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@company.com"
+              required
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
             />
           </label>
           <label className="block text-sm font-semibold text-slate-700">
             Password
             <input
               type="password"
-              placeholder="Password sign-up coming soon"
-              disabled
-              className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Create a password"
+              minLength={8}
+              required
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
             />
           </label>
+          {error ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+              {error}
+            </p>
+          ) : null}
           <button
-            type="button"
-            disabled
-            className="w-full rounded-full border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-400"
+            type="submit"
+            disabled={isLoading}
+            className="w-full rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
-            Create account with Email
+            {isLoading ? "Creating account..." : "Create account with Email"}
           </button>
-        </div>
+        </form>
 
         <p className="mt-6 text-center text-sm text-slate-600">
           Already have an account?{" "}

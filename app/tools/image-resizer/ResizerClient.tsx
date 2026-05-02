@@ -78,6 +78,15 @@ function loadImageFromBlob(blob: Blob) {
   });
 }
 
+async function getImageDimensions(blob: Blob) {
+  const image = await loadImageFromBlob(blob);
+
+  return {
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+  };
+}
+
 function drawImageToCanvas(image: HTMLImageElement, scale: number) {
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
   const height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -216,8 +225,15 @@ export default function ResizerClient() {
   const [fileSizePresetIndex, setFileSizePresetIndex] = useState(4);
   const [loading, setLoading] = useState(false);
   const [finalResultUrl, setFinalResultUrl] = useState<string | null>(null);
+  const [finalResultBlob, setFinalResultBlob] = useState<Blob | null>(null);
+  const [resultDimensions, setResultDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [resultSize, setResultSize] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState('lumina-ai-resized.jpg');
+  const [savingResult, setSavingResult] = useState(false);
+  const [storedResultId, setStoredResultId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedFileSize = FILE_SIZE_PRESETS[fileSizePresetIndex];
@@ -243,7 +259,11 @@ export default function ResizerClient() {
 
   function resetProcessedState() {
     setFinalResultUrl(null);
+    setFinalResultBlob(null);
+    setResultDimensions(null);
     setResultSize(null);
+    setStoredResultId(null);
+    setSavingResult(false);
     setError(null);
   }
 
@@ -373,22 +393,55 @@ export default function ResizerClient() {
       setLoading(true);
       setError(null);
       setFinalResultUrl(null);
+      setFinalResultBlob(null);
+      setResultDimensions(null);
       setResultSize(null);
+      setStoredResultId(null);
 
       const blob = await createTargetSizedImage(
         sourceBlob,
         selectedFileSize.targetBytes,
         outputFormat
       );
+      const dimensions = await getImageDimensions(blob);
       const resultUrl = URL.createObjectURL(blob);
+      const ext = OUTPUT_FORMATS.find((f) => f.value === outputFormat)?.ext || 'jpg';
+      const nextDownloadName = `lumina-ai-resized-${selectedFileSize.label
+        .toLowerCase()
+        .replace(/\s+/g, '-')}.${ext}`;
 
       setFinalResultUrl(resultUrl);
+      setFinalResultBlob(blob);
+      setResultDimensions(dimensions);
       setResultSize(formatBytes(blob.size));
+      setDownloadName(nextDownloadName);
+      
+      // Auto save after processing finishes
+      try {
+        const formData = new FormData();
+        formData.append('file', blob, nextDownloadName);
+        formData.append('originalName', file?.name ?? '');
+        formData.append('outputName', nextDownloadName);
+        formData.append('originalSize', String(file?.size ?? 0));
+        formData.append('sourceSize', String(sourceSize));
+        formData.append('targetLabel', selectedFileSize.label);
+        formData.append('targetBytes', String(selectedFileSize.targetBytes));
+        formData.append('width', String(dimensions.width));
+        formData.append('height', String(dimensions.height));
+        formData.append('cropApplied', String(Boolean(croppedBlob)));
 
-      const ext = OUTPUT_FORMATS.find((f) => f.value === outputFormat)?.ext || 'jpg';
-      setDownloadName(
-        `lumina-ai-resized-${selectedFileSize.label.toLowerCase().replace(/\s+/g, '-')}.${ext}`,
-      );
+        const response = await fetch('/api/image-resizer/results', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const payload: any = await response.json().catch(() => null);
+        if (response.ok && payload?.id) {
+          setStoredResultId(payload.id);
+        }
+      } catch {
+       // Silently fail if save error happens during auto processing 
+      }
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -397,6 +450,88 @@ export default function ResizerClient() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveGeneratedResult() {
+    if (!finalResultBlob || !resultDimensions) {
+      throw new Error('Please finalize the image before downloading.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', finalResultBlob, downloadName);
+    formData.append('originalName', file?.name ?? '');
+    formData.append('outputName', downloadName);
+    formData.append('originalSize', String(file?.size ?? 0));
+    formData.append('sourceSize', String(sourceSize));
+    formData.append('targetLabel', selectedFileSize.label);
+    formData.append('targetBytes', String(selectedFileSize.targetBytes));
+    formData.append('width', String(resultDimensions.width));
+    formData.append('height', String(resultDimensions.height));
+    formData.append('cropApplied', String(Boolean(croppedBlob)));
+
+    const response = await fetch('/api/image-resizer/results', {
+      method: 'POST',
+      body: formData,
+    });
+    const payload: unknown = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const message =
+        payload &&
+        typeof payload === 'object' &&
+        'error' in payload &&
+        typeof payload.error === 'string'
+          ? payload.error
+          : 'Could not save this image to storage.';
+
+      throw new Error(message);
+    }
+
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      'id' in payload &&
+      typeof payload.id === 'string'
+    ) {
+      setStoredResultId(payload.id);
+    }
+  }
+
+  function triggerDownload() {
+    if (!finalResultUrl) return;
+
+    const link = document.createElement('a');
+    link.href = finalResultUrl;
+    link.download = downloadName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  async function handleDownload() {
+    if (!finalResultBlob || !finalResultUrl) {
+      setError('Please finalize the image before downloading.');
+      return;
+    }
+
+    try {
+      setSavingResult(true);
+      setError(null);
+
+      if (!storedResultId) {
+        await saveGeneratedResult();
+      }
+
+      triggerDownload();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Could not save this image before download.',
+      );
+    } finally {
+      setSavingResult(false);
     }
   }
 
@@ -600,13 +735,19 @@ export default function ResizerClient() {
                   <p className="mb-3 text-sm font-semibold text-green-700">
                     Ready{resultSize ? ` (${resultSize})` : ''}
                   </p>
-                  <a
-                    href={finalResultUrl}
-                    download={downloadName}
-                    className="inline-block rounded-lg bg-green-600 px-6 py-2 font-medium text-white transition-colors hover:bg-green-700"
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    disabled={savingResult}
+                    className="inline-block rounded-lg bg-green-600 px-6 py-2 font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    Download
-                  </a>
+                    {savingResult ? 'Saving...' : 'Download'}
+                  </button>
+                  {storedResultId ? (
+                    <p className="mt-2 text-xs font-medium text-green-700">
+                      
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>

@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     title: "Rony Studio",
     description:
       "Rony Studio is the personal website and creative portfolio of Rony.",
-    url: "https://rony.studio",
+    url: "https://photoeditor.rony.studio",
     siteName: "Rony Studio",
     type: "website",
   },

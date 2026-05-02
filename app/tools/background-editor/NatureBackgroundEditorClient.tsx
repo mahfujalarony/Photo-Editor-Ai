@@ -336,6 +336,20 @@ function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
   });
 }
 
+function dataUrlToBlob(dataUrl: string) {
+  const [header, data] = dataUrl.split(",");
+  const mimeMatch = header?.match(/data:(.*?);/);
+  const mimeType = mimeMatch?.[1] || "image/jpeg";
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mimeType });
+}
+
 function flattenCanvasForJpeg(canvas: HTMLCanvasElement) {
   const flattenedCanvas = document.createElement("canvas");
   flattenedCanvas.width = canvas.width;
@@ -606,7 +620,11 @@ async function composeNatureImage({
     ctx.restore();
   });
 
-  return canvas.toDataURL("image/jpeg", 0.94);
+  return {
+    dataUrl: canvas.toDataURL("image/jpeg", 0.94),
+    width,
+    height,
+  };
 }
 
 export default function NatureBackgroundEditorClient() {
@@ -641,6 +659,7 @@ export default function NatureBackgroundEditorClient() {
   const [isBackgroundDragging, setIsBackgroundDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [storedResultId, setStoredResultId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const backgroundOptions = useMemo(
@@ -671,6 +690,10 @@ export default function NatureBackgroundEditorClient() {
   const hasUnpreparedLayers = layers.some((layer) => !layer.cutoutImage);
   const canDownload = preparedLayerCount > 0 || textLayers.length > 0;
   const isBusy = isProcessing || isDownloading;
+  const downloadName = useMemo(
+    () => `lumina-nature-${selectedBackground.id}.jpg`,
+    [selectedBackground.id],
+  );
   const textEditorText = selectedTextLayer?.text ?? draftText;
   const textEditorColor = selectedTextLayer?.color ?? draftTextColor;
   const textEditorFontFamily =
@@ -685,6 +708,10 @@ export default function NatureBackgroundEditorClient() {
   useEffect(() => {
     textLayersRef.current = textLayers;
   }, [textLayers]);
+
+  useEffect(() => {
+    setStoredResultId(null);
+  }, [layers, textLayers, selectedBackgroundId]);
 
   useEffect(() => {
     return () => {
@@ -945,7 +972,7 @@ export default function NatureBackgroundEditorClient() {
     addSubjectFiles(Array.from(event.dataTransfer.files ?? []));
   }
 
-  function setCustomBackgroundFile(file: File) {
+  async function setCustomBackgroundFile(file: File) {
     const { accepted, hasUnsupported, hasOversized } = getValidImageFiles([file]);
     const backgroundFile = accepted[0];
 
@@ -973,6 +1000,18 @@ export default function NatureBackgroundEditorClient() {
     });
     setSelectedBackgroundId(CUSTOM_BACKGROUND_ID);
     setError(null);
+
+    // Save custom background async
+    try {
+      const formData = new FormData();
+      formData.append("file", backgroundFile);
+      fetch("/api/nature-background-editor/upload-background", {
+        method: "POST",
+        body: formData,
+      });
+    } catch {
+      // Background save error is non-blocking
+    }
   }
 
   function handleBackgroundInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -1245,6 +1284,48 @@ export default function NatureBackgroundEditorClient() {
     setIsProcessing(false);
   }
 
+  async function saveGeneratedImage(
+    dataUrl: string,
+    width: number,
+    height: number,
+  ) {
+    const blob = dataUrlToBlob(dataUrl);
+    const formData = new FormData();
+    formData.append("file", blob, downloadName);
+    formData.append("outputName", downloadName);
+    formData.append("backgroundId", selectedBackground.id);
+    formData.append("backgroundName", selectedBackground.name);
+    formData.append("width", String(width));
+    formData.append("height", String(height));
+
+    const response = await fetch("/api/nature-background-editor/results", {
+      method: "POST",
+      body: formData,
+    });
+    const payload: unknown = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const message =
+        payload &&
+        typeof payload === "object" &&
+        "error" in payload &&
+        typeof payload.error === "string"
+          ? payload.error
+          : "Could not save this image to storage.";
+
+      throw new Error(message);
+    }
+
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "id" in payload &&
+      typeof payload.id === "string"
+    ) {
+      setStoredResultId(payload.id);
+    }
+  }
+
   async function downloadFinalImage() {
     if (!canDownload || isBusy) return;
 
@@ -1257,14 +1338,25 @@ export default function NatureBackgroundEditorClient() {
         layers,
         textLayers,
       });
+      if (!storedResultId) {
+        await saveGeneratedImage(
+          renderedImage.dataUrl,
+          renderedImage.width,
+          renderedImage.height,
+        );
+      }
       const link = document.createElement("a");
-      link.href = renderedImage;
-      link.download = `lumina-nature-${selectedBackground.id}.jpg`;
+      link.href = renderedImage.dataUrl;
+      link.download = downloadName;
       document.body.appendChild(link);
       link.click();
       link.remove();
-    } catch {
-      setError("Could not prepare the image for download.");
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Could not prepare the image for download.",
+      );
     } finally {
       setIsDownloading(false);
     }
@@ -1364,6 +1456,7 @@ export default function NatureBackgroundEditorClient() {
     setTextLayers([]);
     setSelectedLayerId(null);
     setSelectedTextLayerId(null);
+    setStoredResultId(null);
     setError(null);
 
     if (inputRef.current) {
@@ -1953,6 +2046,11 @@ export default function NatureBackgroundEditorClient() {
             Reset
           </button>
         </div>
+        {storedResultId ? (
+          <p className="text-sm font-semibold text-emerald-700">
+            
+          </p>
+        ) : null}
       </section>
 
       <aside className="w-full space-y-5">
