@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://rony.studio/sitemap.xml",
+    sitemap: "https://photoeditor.rony.studio/sitemap.xml",
   };
 }

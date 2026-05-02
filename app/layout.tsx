@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://rony.studio"),
+  metadataBase: new URL("https://photoeditor.rony.studio"),
   title: {
     default: "Rony Studio",
     template: "%s | Rony Studio",
