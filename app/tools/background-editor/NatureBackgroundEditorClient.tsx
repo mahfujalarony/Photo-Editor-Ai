@@ -639,9 +639,7 @@ export default function NatureBackgroundEditorClient() {
   const pasteTargetRef = useRef<"subjects" | "background">("subjects");
   const interactionRef = useRef<SubjectInteraction | null>(null);
 
-  const [selectedBackgroundId, setSelectedBackgroundId] = useState(
-    NATURE_BACKGROUNDS[0].id,
-  );
+  const [selectedBackgroundId, setSelectedBackgroundId] = useState<string>("");
   const [customBackground, setCustomBackground] =
     useState<NatureBackground | null>(null);
   const [layers, setLayers] = useState<SubjectLayer[]>([]);
@@ -661,7 +659,7 @@ export default function NatureBackgroundEditorClient() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [storedResultId, setStoredResultId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dbBackgrounds, setDbBackgrounds] = useState<NatureBackground[]>(NATURE_BACKGROUNDS);
+  const [dbBackgrounds, setDbBackgrounds] = useState<NatureBackground[]>([]);
 
   useEffect(() => {
     fetch('/api/admin/backgrounds', { cache: 'no-store' })
@@ -673,7 +671,8 @@ export default function NatureBackgroundEditorClient() {
             name: bg.name,
             src: bg.url
           }));
-          setDbBackgrounds([...mapped, ...NATURE_BACKGROUNDS]);
+          setDbBackgrounds(mapped);
+          setSelectedBackgroundId((prev) => prev || mapped[0].id);
         }
       }).catch(() => {});
   }, []);
@@ -689,7 +688,7 @@ export default function NatureBackgroundEditorClient() {
   const selectedBackground = useMemo(
     () =>
       backgroundOptions.find((item) => item.id === selectedBackgroundId) ??
-      backgroundOptions[0],
+      backgroundOptions[0] ?? { id: "loading", name: "Loading...", src: "" },
     [backgroundOptions, selectedBackgroundId],
   );
 
@@ -2183,8 +2182,8 @@ export default function NatureBackgroundEditorClient() {
           <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">
             Nature Gallery
           </h2>
-          <div className="max-h-[260px] overflow-y-auto overscroll-contain pr-1 sm:max-h-[360px]">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="max-h-[260px] overflow-y-auto overscroll-contain pr-1 sm:max-h-[500px]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {backgroundOptions.map((background) => {
                 const isSelected = background.id === selectedBackground.id;
 
