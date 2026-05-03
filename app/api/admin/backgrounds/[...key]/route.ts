@@ -3,10 +3,11 @@ import { fetchR2Object } from '@/lib/r2';
 
 export async function GET(
   request: Request,
-  { params }: { params: { key: string[] } }
+  { params }: { params: Promise<{ key: string[] }> }
 ) {
   try {
-    const key = params.key.join('/');
+    const resolvedParams = await params;
+    const key = resolvedParams.key.join('/');
     const r2Response = await fetchR2Object(key);
 
     const headers = new Headers();

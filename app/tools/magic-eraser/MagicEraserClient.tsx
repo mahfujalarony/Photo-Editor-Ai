@@ -81,17 +81,17 @@ export default function MagicEraserClient() {
       }
     };
 
-    const handleGlobalDragOver = (e: window.DragEvent) => {
+    const handleGlobalDragOver = (e: globalThis.DragEvent) => {
       e.preventDefault();
       if (!preview) setIsDragging(true);
     };
 
-    const handleGlobalDragLeave = (e: window.DragEvent) => {
+    const handleGlobalDragLeave = (e: globalThis.DragEvent) => {
       e.preventDefault();
       if (!preview) setIsDragging(false);
     };
 
-    const handleGlobalDrop = (e: window.DragEvent) => {
+    const handleGlobalDrop = (e: globalThis.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
       

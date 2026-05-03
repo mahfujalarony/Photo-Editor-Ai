@@ -356,17 +356,17 @@ export default function ResizerClient() {
       }
     };
 
-    const handleGlobalDragOver = (e: window.DragEvent) => {
+    const handleGlobalDragOver = (e: globalThis.DragEvent) => {
       e.preventDefault();
       if (!imgSrc) setIsDragging(true);
     };
 
-    const handleGlobalDragLeave = (e: window.DragEvent) => {
+    const handleGlobalDragLeave = (e: globalThis.DragEvent) => {
       e.preventDefault();
       if (!imgSrc) setIsDragging(false);
     };
 
-    const handleGlobalDrop = (e: window.DragEvent) => {
+    const handleGlobalDrop = (e: globalThis.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
       
