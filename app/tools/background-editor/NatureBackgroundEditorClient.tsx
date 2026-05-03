@@ -661,13 +661,29 @@ export default function NatureBackgroundEditorClient() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [storedResultId, setStoredResultId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dbBackgrounds, setDbBackgrounds] = useState<NatureBackground[]>(NATURE_BACKGROUNDS);
+
+  useEffect(() => {
+    fetch('/api/admin/backgrounds')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map(bg => ({
+            id: bg._id || bg.key,
+            name: bg.name,
+            src: bg.url
+          }));
+          setDbBackgrounds([...NATURE_BACKGROUNDS, ...mapped]);
+        }
+      }).catch(() => {});
+  }, []);
 
   const backgroundOptions = useMemo(
     () =>
       customBackground
-        ? [customBackground, ...NATURE_BACKGROUNDS]
-        : NATURE_BACKGROUNDS,
-    [customBackground],
+        ? [customBackground, ...dbBackgrounds]
+        : dbBackgrounds,
+    [customBackground, dbBackgrounds],
   );
 
   const selectedBackground = useMemo(
@@ -710,6 +726,7 @@ export default function NatureBackgroundEditorClient() {
   }, [textLayers]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStoredResultId(null);
   }, [layers, textLayers, selectedBackgroundId]);
 

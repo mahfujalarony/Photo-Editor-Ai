@@ -34,7 +34,7 @@ export default function SignupPage() {
     const result = await signIn("credentials", {
       email,
       password,
-      callbackUrl: "/tools/nature-background-editor",
+      callbackUrl: "/",
       redirect: false,
     });
 
@@ -67,7 +67,7 @@ export default function SignupPage() {
 
         <button
           type="button"
-          onClick={() => signIn("google", { callbackUrl: "/tools/nature-background-editor" })}
+          onClick={() => signIn("google", { callbackUrl: "/" })}
           className="flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
           Continue with Google

@@ -1,6 +1,6 @@
 'use client';
 
-import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState, useCallback } from 'react';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
@@ -286,18 +286,32 @@ export default function ResizerClient() {
     }
   }
 
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const selectedFile = event.target.files?.[0];
-    if (!selectedFile) return;
-
+  // Wrap inside useCallback to avoid dependency warnings
+  const handleSelectedFile = useCallback((selectedFile: File) => {
     if (!ALLOWED_TYPES.has(selectedFile.type)) {
-      clearAll();
+      setFile(null);
+      setImgSrc('');
+      setIsCropMode(false);
+      resetCropState();
+      resetProcessedState();
+      
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
       setError('Please upload a JPG, PNG, or WebP image.');
       return;
     }
 
     if (selectedFile.size > MAX_SOURCE_FILE_SIZE) {
-      clearAll();
+      setFile(null);
+      setImgSrc('');
+      setIsCropMode(false);
+      resetCropState();
+      resetProcessedState();
+      
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
       setError('Please upload an image smaller than 50MB.');
       return;
     }
@@ -307,7 +321,75 @@ export default function ResizerClient() {
     setIsCropMode(false);
     resetCropState();
     resetProcessedState();
+  }, []);
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile) handleSelectedFile(selectedFile);
   }
+
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDrop = (event: React.DragEvent<HTMLLabelElement | HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const droppedFile = event.dataTransfer.files?.[0];
+    if (droppedFile) handleSelectedFile(droppedFile);
+  };
+
+  // Add paste and global drag/drop support
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (imgSrc) return; // Only if no image is currently uploaded
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const pastedFile = items[i].getAsFile();
+          if (pastedFile) {
+            handleSelectedFile(pastedFile);
+            break;
+          }
+        }
+      }
+    };
+
+    const handleGlobalDragOver = (e: window.DragEvent) => {
+      e.preventDefault();
+      if (!imgSrc) setIsDragging(true);
+    };
+
+    const handleGlobalDragLeave = (e: window.DragEvent) => {
+      e.preventDefault();
+      if (!imgSrc) setIsDragging(false);
+    };
+
+    const handleGlobalDrop = (e: window.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      
+      if (imgSrc) return;
+
+      const droppedFile = e.dataTransfer?.files?.[0];
+      if (droppedFile && droppedFile.type.includes("image/")) {
+        handleSelectedFile(droppedFile);
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    document.addEventListener("dragover", handleGlobalDragOver);
+    document.addEventListener("dragleave", handleGlobalDragLeave);
+    document.addEventListener("drop", handleGlobalDrop);
+
+    return () => {
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("dragover", handleGlobalDragOver);
+      document.removeEventListener("dragleave", handleGlobalDragLeave);
+      document.removeEventListener("drop", handleGlobalDrop);
+    };
+  }, [imgSrc, handleSelectedFile]);
 
   function toggleCropMode() {
     setIsCropMode((current) => {
@@ -435,7 +517,7 @@ export default function ResizerClient() {
           body: formData,
         });
 
-        const payload: any = await response.json().catch(() => null);
+        const payload: { id?: string } | null = await response.json().catch(() => null);
         if (response.ok && payload?.id) {
           setStoredResultId(payload.id);
         }
@@ -562,7 +644,20 @@ export default function ResizerClient() {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 md:p-8">
       {!imgSrc ? (
-        <label className="flex h-64 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/50 text-center transition hover:bg-blue-50">
+        <label 
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={`flex h-64 w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed transition text-center ${
+            isDragging
+              ? 'border-blue-600 bg-blue-100'
+              : 'border-blue-300 bg-blue-50/50 hover:bg-blue-50'
+          }`}
+        >
           <input
             ref={inputRef}
             type="file"
@@ -570,7 +665,7 @@ export default function ResizerClient() {
             className="hidden"
             onChange={handleFileChange}
           />
-          <p className="text-lg font-semibold text-slate-700">Upload an image</p>
+          <p className="text-lg font-semibold text-slate-700">Upload, paste, or drop an image</p>
           <p className="mt-2 text-sm text-slate-500">JPG, PNG, or WebP up to 50MB</p>
         </label>
       ) : (

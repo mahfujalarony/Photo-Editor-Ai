@@ -75,17 +75,27 @@ export default function Home() {
                 <p className="text-gray-600">Instantly isolate subjects from complex backgrounds with pixel-perfect precision.</p>
               </Link>
 
-                            {/* Feature 3 */}
+
+              {/* Feature 3*/}
+              <Link href="/tools/magic-eraser" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
+                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-6 text-xl">🧹</div>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Magic Eraser</h3>
+                <p className="text-gray-600">Remove unwanted objects, people, or text from your photos with ease.</p>
+              </Link>
+
+
+
+                            {/* Feature 4 */}
               <Link href="/tools/image-to-text" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-yellow-100 text-yellow-600 rounded-lg flex items-center justify-center mb-6 text-xl">📝</div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Image to Text</h3>
                 <p className="text-gray-600">Extract text from images with high accuracy and speed.</p>
               </Link>
 
-              {/* Feature 4 */}
+              {/* Feature 5 */}
               <Link href="/tools/background-editor" className="p-8 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition bg-gray-50">
                 <div className="w-12 h-12 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-6 text-xl">🎨</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">Nature Background</h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-3">Background Editor</h3>
                 <p className="text-gray-600">Enhance your images with beautiful, natural backgrounds.</p>
               </Link>
             </div>

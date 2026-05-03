@@ -13,9 +13,11 @@ type TranslateResponse = {
   total: number;
   items: TranslatedItem[];
   error?: string;
+  totalPages?: number;
+  currentPage?: number;
 };
 
-async function loadTranslatedTexts(): Promise<TranslateResponse> {
+async function loadTranslatedTexts(page: number = 1): Promise<TranslateResponse> {
   const headerList = await headers();
   const host = headerList.get("host");
   const protocol = headerList.get("x-forwarded-proto") ?? "http";
@@ -24,9 +26,14 @@ async function loadTranslatedTexts(): Promise<TranslateResponse> {
     return { total: 0, items: [] };
   }
 
+  const limit = 60;
+  const cookieMatch = headerList.get("cookie");
   const response = await fetch(
-    `${protocol}://${host}/api/admin/generated-images?tool=image-to-text&limit=60`,
-    { cache: "no-store" },
+    `${protocol}://${host}/api/admin/generated-images?tool=image-to-text&limit=${limit}&page=${page}`,
+    { 
+      cache: "no-store",
+      headers: cookieMatch ? { cookie: cookieMatch } : undefined,
+    },
   );
 
   if (!response.ok) {
@@ -37,11 +44,19 @@ async function loadTranslatedTexts(): Promise<TranslateResponse> {
     | TranslateResponse
     | null;
 
-  return payload ?? { total: 0, items: [] };
+  return payload 
+    ? { ...payload, totalPages: Math.ceil(payload.total / limit), currentPage: page } 
+    : { total: 0, items: [] };
 }
 
-export default async function TranslateAdminPage() {
-  const gallery = await loadTranslatedTexts();
+export default async function TranslateAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const page = typeof params.page === 'string' ? parseInt(params.page, 10) || 1 : 1;
+  const gallery = await loadTranslatedTexts(page);
   const items = gallery.items ?? [];
 
   return (
@@ -95,6 +110,34 @@ export default async function TranslateAdminPage() {
                 </div>
               </div>
             ))}
+          </div>
+        ) : null}
+
+        {gallery.totalPages && gallery.totalPages > 1 ? (
+          <div className="flex items-center justify-center space-x-2 mt-8">
+            <a
+              href={`/admin/translate?page=${Math.max(1, (gallery.currentPage || 1) - 1)}`}
+              className={`px-4 py-2 text-sm font-medium border rounded-md ${
+                gallery.currentPage === 1
+                  ? "bg-slate-100 text-slate-400 pointer-events-none"
+                  : "bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Previous
+            </a>
+            <span className="text-sm font-medium text-slate-600">
+              Page {gallery.currentPage} of {gallery.totalPages}
+            </span>
+            <a
+              href={`/admin/translate?page=${Math.min(gallery.totalPages, (gallery.currentPage || 1) + 1)}`}
+              className={`px-4 py-2 text-sm font-medium border rounded-md ${
+                gallery.currentPage === gallery.totalPages
+                  ? "bg-slate-100 text-slate-400 pointer-events-none"
+                  : "bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Next
+            </a>
           </div>
         ) : null}
       </div>
