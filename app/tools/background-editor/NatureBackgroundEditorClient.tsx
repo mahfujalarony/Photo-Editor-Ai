@@ -664,7 +664,7 @@ export default function NatureBackgroundEditorClient() {
   const [dbBackgrounds, setDbBackgrounds] = useState<NatureBackground[]>(NATURE_BACKGROUNDS);
 
   useEffect(() => {
-    fetch('/api/admin/backgrounds')
+    fetch('/api/admin/backgrounds', { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -673,7 +673,7 @@ export default function NatureBackgroundEditorClient() {
             name: bg.name,
             src: bg.url
           }));
-          setDbBackgrounds([...NATURE_BACKGROUNDS, ...mapped]);
+          setDbBackgrounds([...mapped, ...NATURE_BACKGROUNDS]);
         }
       }).catch(() => {});
   }, []);

@@ -7,7 +7,7 @@ export default function AdminBackgroundUploadPage() {
   const [loading, setLoading] = useState(false);
 
   const fetchBackgrounds = async () => {
-    const res = await fetch('/api/admin/backgrounds');
+    const res = await fetch('/api/admin/backgrounds', { cache: 'no-store' });
     if (res.ok) setBackgrounds(await res.json());
   };
 

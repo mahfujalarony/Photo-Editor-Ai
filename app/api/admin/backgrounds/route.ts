@@ -4,6 +4,8 @@ import { getDb } from '@/lib/mongodb';
 import { uploadR2Object, createR2ObjectKeyForTool, getR2PublicUrl } from '@/lib/r2';
 import { authOptions } from "@/lib/auth";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -46,11 +48,6 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email || session.user.email !== "mahfujalamrony07@gmail.com") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
     const db = await getDb();
     const backgrounds = await db.collection('backgrounds').find({}).sort({ createdAt: -1 }).toArray();
     return NextResponse.json(backgrounds);
